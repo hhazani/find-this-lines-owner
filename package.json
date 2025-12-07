@@ -2,7 +2,7 @@
     "name": "find-this-lines-owner",
     "displayName": "find this line's owner",
     "description": "finds who is the original owner of each line of code",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "publisher": "HLabs",
     "repository": {
         "type": "git",
