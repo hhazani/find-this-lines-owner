@@ -31,10 +31,6 @@
             {
                 "command": "find-this-lines-owner.investigate-line",
                 "title": "Find This Line's Owner"
-            },
-            {
-                "command": "find-this-lines-owner.show-history",
-                "title": "Show Line History"
             }
         ],
         "menus": {

@@ -1,7 +1,11 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { LineHistoryEntry } from "./types";
-import { getLineHistory, getFileContentAtCommit } from "./gitService";
+import { LineHistoryEntry, PullRequestInfo } from "./types";
+import {
+    getLineHistory,
+    getFileContentAtCommit,
+    getPullRequestsForLine,
+} from "./gitService";
 import { GitCommitContentProvider } from "./gitCommitContentProvider";
 import { LineOwnerCodeLensProvider } from "./lineOwnerCodeLensProvider";
 
@@ -26,7 +30,9 @@ export function registerShowHistoryCommand(
                 }
 
                 const items = history.map((entry, index) => ({
-                    label: `${index === 0 ? "👑" : "📝"} ${entry.author}`,
+                    label: `${index === history.length - 1 ? "👑" : "📝"} ${
+                        entry.author
+                    }`,
                     description: `${entry.hash} • ${entry.date}`,
                     detail: entry.message,
                     commit: entry,
@@ -47,6 +53,53 @@ export function registerShowHistoryCommand(
                         filePath,
                         workspaceRoot,
                         gitContentProvider
+                    );
+                }
+            } catch (error) {
+                vscode.window.showErrorMessage(`Error: ${error}`);
+            }
+        }
+    );
+
+    context.subscriptions.push(command);
+}
+
+export function registerShowPRsCommand(context: vscode.ExtensionContext) {
+    const command = vscode.commands.registerCommand(
+        "find-this-lines-owner.show-prs",
+        async (line: number, filePath: string, workspaceRoot: string) => {
+            try {
+                const prs = await getPullRequestsForLine(
+                    filePath,
+                    line + 1,
+                    workspaceRoot
+                );
+                if (prs.length === 0) {
+                    vscode.window.showInformationMessage(
+                        "No pull requests found for this line"
+                    );
+                    return;
+                }
+
+                const items = prs.map((pr) => ({
+                    label: `🔀 PR #${pr.number}`,
+                    description: `${pr.author} • ${pr.mergedDate}`,
+                    detail: pr.title,
+                    pr: pr,
+                }));
+
+                const selected = await vscode.window.showQuickPick(items, {
+                    placeHolder: `${prs.length} pull request(s) affected line ${
+                        line + 1
+                    }`,
+                    title: "🔍 Pull Requests",
+                    matchOnDescription: true,
+                    matchOnDetail: true,
+                });
+
+                if (selected && selected.pr.url) {
+                    await vscode.env.openExternal(
+                        vscode.Uri.parse(selected.pr.url)
                     );
                 }
             } catch (error) {

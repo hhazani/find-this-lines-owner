@@ -6,3 +6,11 @@ export interface LineHistoryEntry {
     date: string;
     message: string;
 }
+
+export interface PullRequestInfo {
+    number: string;
+    title: string;
+    url: string;
+    author: string;
+    mergedDate: string;
+}

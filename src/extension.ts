@@ -3,6 +3,7 @@ import { GitCommitContentProvider } from "./gitCommitContentProvider";
 import { LineOwnerCodeLensProvider } from "./lineOwnerCodeLensProvider";
 import {
     registerShowHistoryCommand,
+    registerShowPRsCommand,
     registerInvestigateLineCommand,
 } from "./commands";
 
@@ -29,6 +30,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     registerShowHistoryCommand(context, gitContentProvider);
+    registerShowPRsCommand(context);
     registerInvestigateLineCommand(context, codeLensProvider);
 }
 

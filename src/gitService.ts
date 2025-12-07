@@ -1,6 +1,6 @@
 import { exec } from "child_process";
 import * as path from "path";
-import { LineHistoryEntry } from "./types";
+import { LineHistoryEntry, PullRequestInfo } from "./types";
 
 export async function getLineHistory(
     filePath: string,
@@ -70,6 +70,122 @@ export function getFileContentAtCommit(
                     return;
                 }
                 resolve(stdout);
+            }
+        );
+    });
+}
+
+export async function getPullRequestsForLine(
+    filePath: string,
+    lineNumber: number,
+    workspaceRoot: string
+): Promise<PullRequestInfo[]> {
+    return new Promise((resolve, reject) => {
+        const relativePath = path.relative(workspaceRoot, filePath);
+        // First get commits that touched this line
+        const command = `git log -L ${lineNumber},${lineNumber}:"${relativePath}" --pretty=format:"%H" --no-patch`;
+
+        exec(
+            command,
+            { cwd: workspaceRoot },
+            async (error: Error | null, stdout: string, stderr: string) => {
+                if (error) {
+                    resolve([]);
+                    return;
+                }
+
+                const commitHashes = stdout
+                    .trim()
+                    .split("\n")
+                    .filter((h) => h);
+                if (commitHashes.length === 0) {
+                    resolve([]);
+                    return;
+                }
+
+                // Get PR information for each commit
+                const prSet = new Map<string, PullRequestInfo>();
+
+                for (const hash of commitHashes) {
+                    try {
+                        const pr = await getPRForCommit(hash, workspaceRoot);
+                        if (pr) {
+                            prSet.set(pr.number, pr);
+                        }
+                    } catch (e) {
+                        // Ignore errors for individual commits
+                    }
+                }
+
+                resolve(Array.from(prSet.values()));
+            }
+        );
+    });
+}
+
+async function getPRForCommit(
+    commitHash: string,
+    workspaceRoot: string
+): Promise<PullRequestInfo | null> {
+    return new Promise((resolve) => {
+        // Try to extract PR number from commit message
+        const command = `git log -1 --pretty=format:"%s|%an|%ad" --date=relative ${commitHash}`;
+
+        exec(
+            command,
+            { cwd: workspaceRoot },
+            (error: Error | null, stdout: string, stderr: string) => {
+                if (error) {
+                    resolve(null);
+                    return;
+                }
+
+                const [message, author, date] = stdout.split("|");
+
+                // Look for PR patterns like #123, (#123), PR #123, or "Merge pull request #123"
+                const prPatterns = [
+                    /Merge pull request #(\d+)/i,
+                    /\(#(\d+)\)/,
+                    /#(\d+)/,
+                ];
+
+                for (const pattern of prPatterns) {
+                    const match = message.match(pattern);
+                    if (match) {
+                        const prNumber = match[1];
+
+                        // Try to get remote URL for constructing PR URL
+                        exec(
+                            "git config --get remote.origin.url",
+                            { cwd: workspaceRoot },
+                            (err, remoteUrl) => {
+                                let url = "";
+                                if (!err && remoteUrl) {
+                                    const trimmedUrl = remoteUrl.trim();
+                                    // Convert git URL to https GitHub URL
+                                    let repoUrl = trimmedUrl
+                                        .replace(
+                                            /^git@github\.com:/,
+                                            "https://github.com/"
+                                        )
+                                        .replace(/\.git$/, "");
+                                    url = `${repoUrl}/pull/${prNumber}`;
+                                }
+
+                                resolve({
+                                    number: prNumber,
+                                    title: message,
+                                    url: url,
+                                    author: author || "",
+                                    mergedDate: date || "",
+                                });
+                            }
+                        );
+                        return;
+                    }
+                }
+
+                resolve(null);
             }
         );
     });
